@@ -13,4 +13,4 @@ try:  # pragma: no cover - trivial packaging fallback
 
     __version__ = version("amaterasu")
 except (ImportError, PackageNotFoundError):  # pragma: no cover
-    __version__ = "0.1.0a1"
+    __version__ = "0.1.0a2"
