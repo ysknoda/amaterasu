@@ -1,0 +1,43 @@
+# Silicon: the band structure along the standard path.
+#
+#     amaterasu run bands.yaml
+#
+# Two calculations happen, in this order. First the density is converged on the k-mesh
+# below, exactly as scf.yaml does. Then that density is frozen and the Hamiltonian it
+# defines is diagonalised at each point of the path -- which is not a sample of the zone
+# and cannot be integrated over, so the Fermi level keeps the value the mesh found.
+structure: Si.str
+solver:    bands
+
+xc:
+  functional: PBE
+
+pseudo:
+  method: nc
+  family: pseudodojo-nc-sr-pbe-standard-v0.4
+
+basis:
+  ecut: 40          # Ry
+
+kpoints:
+  # This mesh is only used for the density. It has to be converged for that, and it has
+  # nothing to do with how finely the path below is sampled.
+  scheme:   monkhorst-pack
+  grid:     [8, 8, 8]
+  symmetry: true
+
+occupations:
+  scheme: fixed     # silicon is an insulator
+
+bands:
+  # 'auto' takes the standard path of Hinuma et al., Comput. Mater. Sci. 128, 140 (2017)
+  # from seekpath. That path is defined in seekpath's own standardised primitive cell, so
+  # if it differs from the cell in Si.str the whole run switches to it and says so --
+  # otherwise the labels X, L, W would name points of a different Brillouin zone.
+  # Give a string like 'G-X-W-K-G-L' instead to fix the path yourself, in your own cell.
+  path:    auto
+  npoints: 200
+
+output:
+  directory: ./out
+  prefix:    si

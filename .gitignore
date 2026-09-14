@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# calculation output
+out/
+*.h5
+resolved_input.yaml
+
+# pseudopotential datasets are fetched, never committed (see README)
+pseudos/
+
+.DS_Store
+.venv/
+venv/
+.idea/
+.vscode/
+
+# AI-assisted-development tooling (process artifacts, not the package)
+.claude/
+.code-check/
+.github_release/
+.pip_preparation/

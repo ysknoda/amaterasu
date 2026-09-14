@@ -1,0 +1,47 @@
+# Silicon: a self-consistent field calculation with PAW datasets.
+#
+#     amaterasu run paw.yaml
+#
+# The JTH table is GPL-3.0 and is fetched on first use into pseudo.directory (about 1 MB
+# for Si).  What differs from scf.yaml is the pseudo.method and the two cutoffs; the
+# solver, the mixer and the convergence thresholds are the same.
+structure: Si.str
+solver:    scf
+
+xc:
+  functional: PBE     # the JTH v2.0 table covers PBE and LDA only, never PBEsol
+
+pseudo:
+  method: paw
+  family: jth-pbe-v2.0
+
+basis:
+  # The dataset advertises 10 Ha (20 Ry) for low, medium and high alike, and that is
+  # optimistic: at 20 Ry the l = 1 projectors carry only about 70% of their reciprocal
+  # -space norm, and the equation of state is still moving. 40 Ry captures over 99.7% of
+  # every channel and is what the delta factor below was measured at.
+  ecut:     40        # Ry
+  # null would give 8*ecut for PAW, which is this same 320 Ry. Written out because the
+  # compensation charge -- not the orbitals -- is what sets it: it is the sharpest object
+  # in the density, and a PAW run needs a much larger density cutoff than a
+  # norm-conserving one for that reason alone.
+  ecut_rho: 320       # Ry
+
+kpoints:
+  scheme:   monkhorst-pack
+  grid:     [8, 8, 8]
+  symmetry: true
+
+occupations:
+  scheme: fixed       # silicon is an insulator
+
+scf:
+  method:      mixing
+  eigensolver: davidson    # generalised: PAW orbitals are orthonormal under S, not 1
+  mixing:      {algorithm: pulay, beta: 0.4, history: 8, preconditioner: kerker}
+  tol_energy:  1.0e-8
+  tol_density: 1.0e-8
+
+output:
+  directory: ./out
+  prefix:    si_paw

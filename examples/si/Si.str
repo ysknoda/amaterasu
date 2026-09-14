@@ -1,0 +1,19 @@
+# Silicon, diamond structure, primitive FCC cell
+# a = 5.4307 A (experimental, 0 K extrapolated)
+# Reference checks:  nearest Si-Si = 2.3516 A,  space group Fd-3m (227),
+#                    V = 40.0412 A^3,  rho = 2.3294 g/cm^3
+
+units       angstrom
+scale       1.0
+
+%block lattice_vectors          # rows are a1, a2, a3
+  0.00000   2.71535   2.71535
+  2.71535   0.00000   2.71535
+  2.71535   2.71535   0.00000
+%endblock lattice_vectors
+
+%block atomic_positions fractional
+#  el      x        y        z
+   Si    0.0000   0.0000   0.0000
+   Si    0.2500   0.2500   0.2500
+%endblock atomic_positions

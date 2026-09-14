@@ -1,0 +1,15 @@
+# Silicon, diamond structure, with one atom pushed 0.1 A off its Wyckoff site.
+# Relaxing this must put it back: the ideal positions are fixed by symmetry, so the
+# converged forces are exactly zero there.
+units       angstrom
+
+%block lattice_vectors
+  0.00000   2.71535   2.71535
+  2.71535   0.00000   2.71535
+  2.71535   2.71535   0.00000
+%endblock lattice_vectors
+
+%block atomic_positions cartesian
+   Si    0.00000   0.00000   0.00000
+   Si    1.45767   1.35767   1.35767
+%endblock atomic_positions

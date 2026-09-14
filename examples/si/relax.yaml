@@ -1,0 +1,28 @@
+# Silicon: relax one displaced atom back onto its Wyckoff site.
+#
+#     amaterasu run relax.yaml
+#
+# The forces are exact Hellmann-Feynman derivatives -- a plane-wave basis is attached to
+# the cell, not to the atoms, so there is no Pulay force to correct for.
+structure: Si-displaced.str
+solver:    relax
+
+xc:     {functional: PBE}
+pseudo: {method: nc, family: pseudodojo-nc-sr-pbe-standard-v0.4}
+basis:  {ecut: 36}                 # Ry = 18 Ha, the dataset's recommendation
+
+kpoints:     {scheme: monkhorst-pack, grid: [6, 6, 6]}
+occupations: {scheme: gaussian, smearing: 0.1}   # eV
+
+scf:
+  tol_energy:  1.0e-8              # eV/atom
+  tol_density: 1.0e-8              # integral |dn| per valence electron
+
+relax:
+  algorithm:    fire               # fire | fire2 | lbfgs | lbfgs-ls | bfgs | ode12r
+  fmax:         0.01               # eV/Angstrom
+  max_steps:    50
+  cell:         false              # true also relaxes the cell -- read the Pulay warning
+  fix_symmetry: false              # the displacement broke the symmetry on purpose
+
+output: {directory: ./out, prefix: si_relax}

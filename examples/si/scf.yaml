@@ -1,0 +1,37 @@
+# Silicon: a single self-consistent field calculation with PBE and norm-conserving
+# pseudopotentials.  Run it with
+#
+#     amaterasu run scf.yaml
+#
+# The datasets are fetched on first use into pseudo.directory (about 200 kB for Si).
+structure: Si.str
+solver:    scf
+
+xc:
+  functional: PBE
+
+pseudo:
+  method: nc
+  family: pseudodojo-nc-sr-pbe-standard-v0.4
+
+basis:
+  ecut: null        # null -> the dataset's own recommendation, 18 Ha (36 Ry) for Si
+
+kpoints:
+  scheme:   monkhorst-pack
+  grid:     [8, 8, 8]
+  symmetry: true    # 512 points -> 29 in the irreducible wedge
+
+occupations:
+  scheme: fixed     # silicon is an insulator; no smearing is needed or wanted
+
+scf:
+  method:      mixing
+  eigensolver: davidson
+  mixing:      {algorithm: pulay, beta: 0.4, history: 8, preconditioner: kerker}
+  tol_energy:  1.0e-8     # eV/atom
+  tol_density: 1.0e-8     # integral |dn| per valence electron (dimensionless)
+
+output:
+  directory: ./out
+  prefix:    si_scf

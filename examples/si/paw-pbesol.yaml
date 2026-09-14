@@ -1,0 +1,59 @@
+# Silicon: PBEsol with a PAW dataset -- the combination that needs the UPF reader.
+#
+#     amaterasu run paw-pbesol.yaml
+#
+# PBEsol PAW datasets exist only as Quantum ESPRESSO UPF files. The PAW-XML tables (JTH,
+# GPAW) ship PBE and LDA and nothing else, so there is no PBEsol PAW-XML file to fetch.
+# pslibrary's are written in the Kresse-Joubert formulation rather than Blochl's, and
+# amaterasu derives the two quantities that formulation does not store -- the zero
+# potential v_bar and the kinetic-energy differences -- when it loads the file.
+#
+# The file is not fetchable: pslibrary's names vary per element and there is no manifest
+# to check a hash against. Download it once from
+#   https://pseudopotentials.quantum-espresso.org/upf_files/Si.pbesol-n-kjpaw_psl.1.0.0.UPF
+# and put it next to this file, or point pseudo.files at wherever it lives.
+structure: Si.str
+solver:    scf
+
+xc:
+  functional: PBEsol
+
+pseudo:
+  method: paw
+  # An explicit path bypasses the family registry. The reader checks the file's own
+  # header against xc.functional above and stops if they disagree, so a PBE file named
+  # into a PBEsol run is caught before any electrons move.
+  files: {Si: Si.pbesol-n-kjpaw_psl.1.0.0.UPF}
+
+basis:
+  ecut:     40        # Ry
+  ecut_rho: 320       # Ry -- set by the compensation charge, not by the orbitals
+
+kpoints:
+  scheme:   monkhorst-pack
+  grid:     [8, 8, 8]
+  symmetry: true
+
+occupations:
+  scheme: fixed       # silicon is an insulator
+
+scf:
+  method:      mixing
+  eigensolver: davidson
+  mixing:      {algorithm: pulay, beta: 0.4, history: 8, preconditioner: kerker}
+  tol_energy:  1.0e-8
+  tol_density: 1.0e-8
+
+output:
+  directory: ./out
+  prefix:    si_paw_pbesol
+
+# Measured with this input, fitting seven volumes over +-6%:
+#
+#     PBEsol PAW (this file)      a0 = 5.4380 A   +0.13% vs experiment
+#     PBEsol NC  (PseudoDojo)     a0 = 5.4314 A   +0.01%
+#     PBE    PAW (pslibrary)      a0 = 5.4709 A   +0.73%
+#
+# The PAW and norm-conserving PBEsol numbers agree to 0.0067 A across two file formats and
+# two PAW formulations, which is the check that the derived quantities above are right.
+# Experiment is 5.431 A.

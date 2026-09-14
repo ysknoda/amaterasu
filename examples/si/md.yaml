@@ -1,0 +1,32 @@
+# Silicon: a short constant-energy molecular dynamics run.
+#
+#     amaterasu run md.yaml
+#
+# NVE is the honest test of a force implementation: nothing is supposed to change, so any
+# drift in the total energy is a defect in the forces, the timestep or the SCF tolerance.
+# The conserved quantity is the *free* energy plus the kinetic energy, because with
+# smeared occupations the force is the gradient of F = E - sigma S.
+structure: Si.str
+solver:    md
+
+xc:     {functional: PBE}
+pseudo: {method: nc, family: pseudodojo-nc-sr-pbe-standard-v0.4}
+basis:  {ecut: 36}                 # Ry
+
+kpoints:     {scheme: monkhorst-pack, grid: [4, 4, 4]}
+occupations: {scheme: gaussian, smearing: 0.1}   # eV
+
+scf:
+  tol_energy:  1.0e-9              # tighter than usual: MD integrates the error
+  tol_density: 1.0e-9
+
+md:
+  ensemble:    nve                 # nve | nvt | npt
+  timestep:    1.0                 # fs -- must resolve the fastest phonon (Si: 64 fs period)
+  steps:       50
+  temperature: 300                 # K, for the initial Maxwell-Boltzmann velocities
+  seed:        1
+  # For NVT, add: thermostat: nose-hoover-chain, tdamp: 100  (fs)
+  # For NPT, add: barostat: mtk, pressure: 0.0 (GPa), pdamp: 1000 (fs)
+
+output: {directory: ./out, prefix: si_md}

@@ -1,0 +1,35 @@
+# Silicon: PBE relaxation with norm-conserving pseudopotentials
+structure: Si.str
+solver:    relax
+
+xc:
+  functional: PBE
+
+pseudo:
+  method: nc
+  family: pseudodojo-nc-sr-pbe-standard-v0.4
+
+basis:
+  ecut: 60          # Ry (write "816 eV" for the VASP convention)
+
+kpoints:
+  scheme: monkhorst-pack
+  grid:   [8, 8, 8]
+
+occupations:
+  scheme:   gaussian
+  smearing: 0.05    # eV
+
+scf:
+  method:      mixing
+  eigensolver: davidson
+  tol_energy:  1.0e-6
+
+relax:
+  algorithm: fire
+  fmax:      0.01   # eV/Angstrom
+  cell:      false
+
+output:
+  directory: ./out
+  prefix:    si
