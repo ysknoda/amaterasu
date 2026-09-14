@@ -34,3 +34,6 @@ venv/
 .code-check/
 .github_release/
 .pip_preparation/
+
+# AI-chat exports and other planning source material, not part of the package
+references/
