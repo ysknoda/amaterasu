@@ -13,6 +13,7 @@ result of a real trade-off get a file.
 | [0004](0004-electrons-theory-config-section.md) | The engine switch is a new `electrons.theory` config section, not `pseudo.method` |
 | [0005](0005-ground-state-result-contract.md) | Solvers consume a common `GroundState` contract; eigenvalue data is Kohn-Sham-specific |
 | [0006](0006-reduced-order-kohn-sham-does-not-claim-wall-clock-speedup.md) | The reduced-order Kohn-Sham track is gated on accuracy and basis size, not wall-clock: Galerkin projection alone does not speed up `H` application |
+| [0007](0007-orbital-free-is-an-sp-element-method.md) | Orbital-free DFT is an sp-element method by physics, not by data; a BLPS generator is an optional gated M5 and cannot lift that ceiling; library files bundled unchanged only (CC BY-ND) |
 
 ## Decisions recorded here that did not need their own ADR
 
@@ -33,6 +34,12 @@ easy to reverse or not surprising, so a line each is enough:
   semilocal stress from M1, nonlocal-kernel stress at M3, all finite-difference checked;
   `basis.ecut` is the cutoff of `phi` and the density gets `4*ecut` as for
   norm-conserving) are standard practice, easy to revise, and recorded in the plan.
+- **Round 3 (2026-09-15)**: internal order M0 -> M1 -> rank survey -> M2 -> M3 -> POD;
+  the three M0 prerequisites may land during Phase 5 since they are standard-DFT fixes;
+  the initial-density fallback is *uniform* (parameter-free); spin-polarised orbital-free
+  is a recorded future item ("M4") via exact spin scaling, not part of Phase 10; the
+  reference PDFs are read with the locally installed pymupdf, no new dependency. The BLPS
+  Library is CC BY-ND 4.0 and covers nine sp elements (Li, Mg, Al, Si, P, Ga, As, In, Sb).
 - **Reduced-order track choices** (Gamma-only first, per-k bases later; frozen-phonon Si
   as the parameter family) and the **tensor-train rank survey** (QTT via a self-written
   TT-SVD on power-of-two grids; density, Hartree potential, orbitals and the Wang-Teter
