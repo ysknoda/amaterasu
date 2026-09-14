@@ -10,7 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-authors = [{ name = "Yusuke N." }]
+authors = [{ name = "Yusuke Noda" }]
 keywords = ["dft", "density-functional-theory", "plane-wave", "paw", "materials-science"]
 classifiers = [
     "Development Status :: 3 - Alpha",
