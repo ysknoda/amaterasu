@@ -18,6 +18,10 @@ resolved_input.yaml
 
 # pseudopotential datasets are fetched, never committed (see README)
 pseudos/
+# ...except the four small CC BY 4.0 fixtures the test suite needs. Without this the rule
+# above also swallows tests/data/pseudos/, and a clean clone cannot run its own tests --
+# which is exactly how it was found, by the first CI run on a fresh checkout.
+!tests/data/pseudos/
 
 .DS_Store
 .venv/
