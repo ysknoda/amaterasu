@@ -53,13 +53,35 @@ Exchange-correlation and kinetic functionals are in very different states:
      result is an expression that can be differentiated by hand for forces and stress
      and checked against finite differences like everything else here.
   2. **A run-time neural kinetic functional**, selected as one more entry in `kedf:`
-     alongside `tf`, `vw`, `tflambdavw`, `lkt`, `wt`, `wgc`. This is the one that carries
-     real cost, recorded here so it is not discovered later: a tensor-library dependency
-     (not to be installed without asking), training-set generation on the scale of
-     CPN5's 196,830 grid points, and **forces implemented by us** -- the CPN5 paper does
-     not treat them, and this project does not accept a functional whose forces are not
-     finite-difference verified.
+     alongside `tf`, `vw`, `tflambdavw`, `lkt`, `wt`, `wgc`, and built on PyTorch (see
+     below). Its real costs, recorded here so they are not discovered later: the torch
+     dependency, training-set generation, and **the stress**.
 - **The analytic ladder remains the default.** A network is opt-in.
+
+### What a neural kinetic functional does *not* cost: forces
+
+An earlier draft of this record claimed that forces would have to be implemented for a
+neural functional because the CPN5 paper does not report them. That was wrong, and the
+correction matters because it makes route 2 cheaper than it looked. With
+
+    E[rho] = T_s[rho] + E_H + E_xc + E_ext[rho, R] + E_II(R)
+
+the density is variational, so at the minimum the implicit term vanishes and `dE/dR`
+keeps only the explicit `R` dependence. `T_s[rho]` has none. **No kinetic functional,
+neural or analytic, contributes an explicit force term** -- which is what this project's
+own plan already said for the semilocal functionals at M1, and it does not stop being
+true because the functional is a network.
+
+Two real costs sit next to that, and they are the ones to watch:
+
+- **Stress does have an explicit term.** Straining the cell changes the G vectors and the
+  reference density that the nonlocal kernels depend on. This is new work of the same
+  shape as the WGC kernel stress at M3.
+- **Force quality tracks how tightly the minimisation converges**, because the force is
+  only free once the density really is at the variational minimum. A functional whose
+  derivative is noisy gives noisy forces with no explicit term to blame. This is the
+  likelier reason CPN5 reports no forces, and it is a gate concern, not an implementation
+  one.
 
 ## These are not competing axes, and the configuration says so
 
@@ -83,10 +105,51 @@ weakest at are the two things the table weighs most. CPN5's authors state plainl
 their functionals "are unable to reproduce the energy ordering of different phases of
 Si", attributing it to training data that does not span volumes and phases and to
 spherically symmetric kernels that cannot carry anisotropy; and they do not report forces
-at all. A functional that predicts better densities but the wrong phase ordering and no
-forces is not usable for the relaxations and molecular dynamics this code exists to run.
+at all. A functional that predicts better densities but the wrong phase ordering is not usable
+for the relaxations and molecular dynamics this code exists to run, however good its
+density looks.
 
 **Re-evaluation trigger**, recorded so that the decision is not frozen by inattention: a
 published neural kinetic functional that (1) reports forces, (2) reproduces phase energy
 ordering, and (3) transfers to elements outside its training set, reopens the priority
 of route 2 against the analytic ladder.
+
+## How route 2 is built (PyTorch)
+
+**Where torch lives.** A `mlkedf = ["torch>=2.2"]` optional extra, included in `all`, on
+the same footing as `jit = ["numba"]` and `mpi = ["mpi4py"]`: a plain install of
+amaterasu does not pull it in. The conversion boundary is a single adapter at the KEDF
+interface; nothing else in the code leaves numpy. A **numpy reference implementation of
+the forward pass** is kept beside the torch one and tested against it, exactly as Phase 9
+requires of every numba kernel -- so the test suite runs without torch, and a change in
+torch behaviour between versions shows up immediately instead of silently.
+
+**Model.** CPN5's shape is the starting point, being the published state of the art for
+solids with its descriptors written down: a semilocal descriptor plus three nonlocal ones
+per scaled channel (16 components for five channels), the channel convolutions done with
+`torch.fft` inside the same graph, a small constrained network, and `t_s(r)` out.
+`dT/drho` comes from autograd -- and is checked against a finite difference of `T`
+regardless, because in this project a derivative is not trusted for being automatic any
+more than for being textbook.
+
+**Training data comes from our own Kohn-Sham runs.** The gate elements of ADR-0008 (Li,
+Be, Mg, Al, Si) across several phases and several volumes -- reusing the plus/minus 6%
+seven-point set the Delta protocol already uses. This directly targets CPN5's own
+diagnosis of its failure, that its training data spanned neither volumes nor phases.
+Two targets are stored per grid point, not one: the kinetic energy density, and the
+**functional derivative** `dT_s/drho = mu - v_s(r)`, which is a by-product of a Kohn-Sham
+run in our own code and is the quantity Imoto, Imada and Oshiyama argue matters because
+it is what appears in the Euler equation. Published weights are not ported: matching
+another code's descriptors, grids and pseudopotentials exactly is the kind of work that
+proved more expensive than doing it ourselves in Phase 4.
+
+**The first experiment holds beryllium out.** Train on Li, Mg, Al and Si; test on Be,
+where Wang-Teter's failure is already measured and recorded as a negative control. The
+question it answers is the only one worth asking of a learned functional here: did it
+learn something Wang-Teter does not know, or is it interpolating between its training
+elements? A hit is real extrapolation; a miss reproduces CPN5's own conclusion -- better
+densities, no more physics -- as our own measurement rather than someone else's.
+
+**Order.** After M3, so that the WGC kernel and its stress are available as the template,
+and after the kernel measurement of ADR-0010, which says which descriptors are worth
+feeding it.
