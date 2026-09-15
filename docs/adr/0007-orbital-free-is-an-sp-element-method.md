@@ -1,9 +1,17 @@
 ---
-status: accepted
+status: accepted (amended by 0008)
 date: 2026-09-15
 ---
 
 # Orbital-free DFT here is an sp-element, nearly-free-electron method; that ceiling is physical and no pseudopotential generator lifts it
+
+> **Amended by [ADR-0008](0008-nonlocal-pseudopotentials-via-the-density-matrix.md).**
+> The conclusion below stands; one of its two reasons does not. The first bullet --
+> that a local pseudopotential acts with one potential on every angular-momentum
+> channel -- is moot, because the potential no longer has to be local. The second --
+> that linear-response kinetic functionals fail for localized densities -- survives
+> and is reinforced by direct measurement of the kinetic kernel (ADR-0010). M5, the
+> gated BLPS generator described below, is retired.
 
 The BLPS Library covers nine elements (Li, Mg, Al, Si, P, Ga, As, In, Sb), so the obvious
 worry was that orbital-free DFT would be limited by data. It is not; it is limited by the

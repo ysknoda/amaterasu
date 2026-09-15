@@ -1,9 +1,15 @@
 ---
-status: accepted
+status: accepted (amended by 0008)
 date: 2026-09-15
 ---
 
 # The primary gate for orbital-free DFT is amaterasu's own Kohn-Sham run with the same local pseudopotential; literature values are the secondary gate; aluminium first, silicon as a measured-failure study
+
+> **Amended by [ADR-0008](0008-nonlocal-pseudopotentials-via-the-density-matrix.md).**
+> The gate structure below stands and gets stronger: Kohn-Sham and orbital-free now
+> consume the identical file *including its projectors*, so the difference really is
+> the functional alone. The pseudopotential source and the element list are replaced
+> by the table in ADR-0008.
 
 An orbital-free result differs from a Kohn-Sham one for three separable reasons: the
 kinetic functional, the pseudopotential, and the numerics (grid, cutoff, minimiser). The

@@ -1,9 +1,17 @@
 ---
-status: accepted
+status: superseded by 0008
 date: 2026-09-15
 ---
 
 # Orbital-free DFT uses local pseudopotentials only: BLPS for real runs, the local part of a norm-conserving file as a development stub, and no in-house generation
+
+> **Superseded by [ADR-0008](0008-nonlocal-pseudopotentials-via-the-density-matrix.md).**
+> The premise below -- that a Kleinman-Bylander projector cannot be applied without
+> orbitals -- is true, but the conclusion drawn from it is not: the nonlocal energy
+> needs the density matrix, not orbitals, and the density matrix can be approximated
+> as a functional of the density. PseudoDojo replaces BLPS as the production source
+> and the in-house generator (M5) is retired. The measured facts below about the BLPS
+> file format and the three M0 prerequisites remain correct and still apply.
 
 Orbital-free DFT has no orbitals, so a Kleinman-Bylander nonlocal projector -- which acts
 on orbitals -- has no meaning in it. Neither the PseudoDojo norm-conserving files nor the
