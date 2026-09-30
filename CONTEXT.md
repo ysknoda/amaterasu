@@ -74,6 +74,61 @@ A measurement, not a method: the tensor-train rank a grid quantity (density, orb
 kernel) needs to reach a given accuracy. It informs whether tensor-train arithmetic is
 worth implementing; it does not itself speed anything up.
 
+**Reduced density basis**:
+A small set of atom-centred functions in which an orbital-free density is expanded, so the
+minimisation runs over their coefficients instead of the grid. Fewer variables, not fewer
+grid operations.
+_Avoid_: latent space, latent-space DFT (the same objection as for the reduced basis)
+
+### Solvers and trajectories
+
+**Native solver**:
+A relaxation, dynamics or transition-path solver that lives inside amaterasu (ported from
+akitsushima) and talks to the engine through the energy/force/stress contract.
+_Avoid_: "our optimiser" when the ASE one is meant
+
+**ASE route**:
+Driving ASE's own optimisers, dynamics and NEB through the `Amaterasu` calculator. Kept
+as the reference that each native solver must reproduce.
+
+**Stream**:
+The sequence of engine calls one solver makes along one path -- an MD trajectory, one NEB
+image, the displacements about one phonon reference structure. Extrapolation history is
+kept per stream, never across streams.
+_Avoid_: "the previous step" (in NEB and phonons the previous call is another stream)
+
+**Force-consistent energy**:
+The energy whose derivatives the forces and stress are: with smearing, the free energy
+`E - TS`. The only energy a solver ever receives.
+_Avoid_: "total energy" unqualified; never pass the extrapolated `E0` to a solver
+
+**Stress**:
+In every amaterasu output, `sigma = -(1/V) dE/dT`: positive under compression, eV/Å^3 in
+data, GPa in logs. The ASE calculator alone reports ASE's opposite sign.
+_Avoid_: "tensile-positive stress" for any amaterasu output
+
+**Conformance test**:
+A test that a ported solver and its akitsushima original give the same result on the same
+analytic potential. Run against a committed golden reference, or live when akitsushima is
+installed.
+
+**Golden reference**:
+Solver output generated once from a pinned akitsushima commit and committed with its
+provenance, so conformance tests run without akitsushima.
+
+### Error control
+
+**Goal-oriented error estimate**:
+An estimate of the discretisation and SCF error in one target quantity (a force, a stress
+component, an energy difference) rather than in the wavefunction or the density.
+_Avoid_: "goal-oriented DFT" (implies solving only for the states a target needs, which a
+self-consistent density does not allow)
+
+**Rank preservation**:
+Whether a set of structures keeps its energy ordering when the discretisation is coarsened.
+Measured by Kendall tau, top-k recall and the largest energy difference of any inverted
+pair.
+
 ### Pseudopotentials and datasets
 
 **Dataset**:

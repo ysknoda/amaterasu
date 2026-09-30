@@ -18,6 +18,9 @@ result of a real trade-off get a file.
 | [0009](0009-density-matrix-parameters-are-a-kedf-patch.md) | The density-matrix parameters `A` and `q` patch the kinetic functional rather than describe the pseudopotential: ship `A=0, q=1` uncalibrated, calibrate against the isolated atom, use the published values only to verify our implementation |
 | [0010](0010-measure-the-kinetic-energy-kernel.md) | Measure the kinetic energy kernel with our own Kohn-Sham engine (`solver: response`) instead of fitting around it; not the Sternheimer route; XWM deliberately not implemented |
 | [0011](0011-neural-networks-for-the-kinetic-functional-but-not-for-exchange-correlation.md) | Neural networks are admitted as an optional kinetic energy density functional (two routes: offline discovery with an analytic product, and an opt-in PyTorch network trained on our own Kohn-Sham data with beryllium held out) but not as an exchange-correlation functional; the analytic ladder stays the default and the ADR-0008 gate table decides. Records the correction that a kinetic functional contributes no explicit force term -- the costs are stress and training data, not forces |
+| [0012](0012-evaluation-of-two-dft-acceleration-surveys.md) | Two AI-written DFT acceleration surveys rated on seven axes at three levels and ranked in two tracks: practical (P1 per-stream extrapolation, P2 Harris-Foulkes, P3 LDOS preconditioner, P4 XL-BOMD, P5 preconditioned relaxation) and research (R1 rank-preserving goal-oriented error control first; embedding library, reduced density basis and frozen subspace conditional or held); ADR-0001's exclusions stand, each with a re-evaluation trigger; novelty literature-checked |
+| [0013](0013-native-solvers-ported-from-akitsushima.md) | Native relaxation, MD, CI-NEB, elastic, TS analysis and phonons are ported from akitsushima by copy (GCMC and Green-Kubo are not), behind one energy/force/stress contract in akitsushima's units with a `context` that names the trajectory stream; ASE stays required and becomes the reference; conformance tests by golden references plus an opt-in live cross-check *(amends the plan's "do not re-implement relax/MD/NEB")* |
+| [0014](0014-output-stress-is-positive-under-compression.md) | All outputs use akitsushima's conventions -- stress positive under compression, eV/Å^3 in data, GPa in logs, MD time in fs -- except the ASE calculator, which keeps ASE's sign; the internal representation is unchanged and the flip happens at the output boundary *(not yet implemented)* |
 
 ## Decisions recorded here that did not need their own ADR
 
@@ -60,3 +63,9 @@ easy to reverse or not surprising, so a line each is enough:
   auto` switches on the presence of projectors, so BLPS files keep working untouched;
   ordering becomes M0 -> M1 -> kernel measurement -> rank survey -> M2 -> nonlocal
   pseudopotential functional -> M3 -> POD.
+- **DFT-acceleration review session (2026-09-30, Q1-Q25)**: produced ADR-0012..0014. Too
+  small for their own ADR: no genetic-algorithm search history exists, so R1 is validated
+  on three structure families built here (ADR-0012); the port and the golden-reference
+  generator never write into the akitsushima repository; decisions are written in English
+  in the ADRs and in Japanese in the plan; phase numbers 11 and 12 are labels, not an
+  execution order, and timing stays with the user.
