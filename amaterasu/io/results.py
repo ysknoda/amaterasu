@@ -8,8 +8,10 @@ Layout
 ------
 ::
 
-    /                       attributes: version, provenance, unit convention
+    /                       attributes: format_version, provenance, unit and stress conventions
     /structure              cell (A), positions (A), numbers, magmoms
+    /forces                 eV/A, shape (natoms, 3)                       [solver: scf]
+    /stress                 eV/A^3, positive under compression; pressure in GPa  [solver: scf]
     /basis                  ecut, ecut_rho (eV), grid shape, plane waves per k-point
     /kpoints                fractional coordinates, weights
     /scf                    energies (eV), eigenvalues (eV), occupations, Fermi level
@@ -18,6 +20,14 @@ Layout
 
 Wavefunctions are written only when ``output.save_wavefunctions`` is set: they are by far
 the largest object in the calculation and are rarely wanted.
+
+Format versions
+---------------
+1. (0.1.0a2 and earlier, no ``format_version`` attribute) no forces or stress.
+2. ``/forces`` and ``/stress`` added; ``stress_convention`` and ``format_version``
+   attributes; the ``unit_time`` attribute is ``fs`` (simulated time) and ``unit_stress``
+   is ``eV/Angstrom^3``. The stress is **positive under compression** (ADR-0014), the
+   opposite sign to ASE's ``get_stress``.
 """
 
 from __future__ import annotations
@@ -26,10 +36,31 @@ from pathlib import Path
 
 import numpy as np
 
-from ..units import BOHR_IN_ANG, HARTREE_IN_EV, OUTPUT_UNITS
+from ..units import (
+    BOHR_IN_ANG,
+    HARTREE_IN_EV,
+    HARTREE_PER_BOHR3_IN_GPA,
+    HARTREE_PER_BOHR_IN_EV_PER_ANG,
+    OUTPUT_UNITS,
+    STRESS_CONVENTION,
+    stress_to_output,
+)
 from .provenance import provenance
 
-__all__ = ["read_bands", "read_scf", "write_bands", "write_scf"]
+__all__ = ["FORMAT_VERSION", "read_bands", "read_scf", "write_bands", "write_scf"]
+
+#: Version of the result-file layout; see the module docstring for what each one holds.
+FORMAT_VERSION = 2
+
+
+def _file_attrs(handle, pseudopotential_paths=None) -> None:
+    """Provenance and the conventions a reader needs to interpret every number."""
+    for key, value in provenance(pseudopotential_paths).items():
+        handle.attrs[key] = value
+    handle.attrs["format_version"] = FORMAT_VERSION
+    handle.attrs["stress_convention"] = STRESS_CONVENTION
+    for quantity, unit in OUTPUT_UNITS.items():
+        handle.attrs[f"unit_{quantity}"] = unit
 
 
 def _attrs(dataset, units: str, description: str) -> None:
@@ -45,17 +76,20 @@ def write_scf(
     config=None,
     pseudopotential_paths: dict[str, str] | None = None,
     save_wavefunctions: bool = False,
+    forces=None,
+    stress=None,
 ) -> Path:
-    """Write an SCF result to HDF5 and return the path."""
+    """Write an SCF result to HDF5 and return the path.
+
+    ``forces`` (Ha/Bohr) and ``stress`` (Ha/Bohr^3, ASE's internal sign) are optional and
+    converted here, the stress to positive-under-compression.
+    """
     import h5py
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as handle:
-        for key, value in provenance(pseudopotential_paths).items():
-            handle.attrs[key] = value
-        for quantity, unit in OUTPUT_UNITS.items():
-            handle.attrs[f"unit_{quantity}"] = unit
+        _file_attrs(handle, pseudopotential_paths)
         handle.attrs["solver"] = "scf"
         handle.attrs["functional"] = system.xc.name
         handle.attrs["converged"] = bool(result.converged)
@@ -137,6 +171,22 @@ def write_scf(
                 "per iteration: free energy, density residual, eigenvalue-sum residual",
             )
 
+        if forces is not None:
+            _attrs(
+                handle.create_dataset("forces", data=forces * HARTREE_PER_BOHR_IN_EV_PER_ANG),
+                "eV/Angstrom",
+                "force on each atom, shape (natoms, 3), in the order of /structure",
+            )
+        if stress is not None:
+            dataset = handle.create_dataset("stress", data=stress_to_output(stress))
+            _attrs(
+                dataset,
+                "eV/Angstrom^3",
+                "stress tensor, positive under compression: sigma = -(1/V) dE/dT for "
+                "lattice' = lattice @ T. The opposite sign to ASE's get_stress",
+            )
+            dataset.attrs["convention"] = STRESS_CONVENTION
+            dataset.attrs["pressure_GPa"] = float(-np.trace(stress) / 3 * HARTREE_PER_BOHR3_IN_GPA)
         _attrs(
             handle.create_dataset(
                 "density", data=result.density / BOHR_IN_ANG**3, compression="gzip"
@@ -177,6 +227,10 @@ def read_scf(path: str | Path) -> dict:
                 s.decode() if isinstance(s, bytes) else s for s in handle["structure/symbols"][()]
             ],
         }
+        # Format version 2 onwards; positive under compression, in eV/Angstrom^3.
+        for name in ("forces", "stress"):
+            if name in handle:
+                result[name] = handle[name][()]
         if "wavefunctions" in handle:
             group = handle["wavefunctions"]
             result["wavefunctions"] = [
@@ -199,10 +253,7 @@ def write_bands(path: str | Path, structure, *, config=None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     band_path = structure.path
     with h5py.File(path, "w") as handle:
-        for key, value in provenance(None).items():
-            handle.attrs[key] = value
-        for quantity, unit in OUTPUT_UNITS.items():
-            handle.attrs[f"unit_{quantity}"] = unit
+        _file_attrs(handle)
         handle.attrs["solver"] = "bands"
         handle.attrs["path"] = str(band_path.path)
         handle.attrs["restandardised_cell"] = bool(structure.restandardised)

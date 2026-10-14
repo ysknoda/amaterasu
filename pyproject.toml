@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "amaterasu"
 version = "0.1.0a2"
-description = "Plane-wave / mixed-basis density functional theory for 3D periodic crystals"
+description = "Plane-wave density functional theory for 3D periodic crystals"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

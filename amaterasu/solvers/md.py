@@ -48,7 +48,7 @@ class MDResult:
 
     atoms: Atoms
     steps: int
-    #: Per step, after equilibration: (time in s, potential, kinetic, total energy in eV,
+    #: Per step, after equilibration: (time in fs, potential, kinetic, total energy in eV,
     #: temperature in K, pressure in GPa).
     history: list[tuple[float, float, float, float, float, float]] = field(default_factory=list)
     trajectory: Path | None = None
@@ -87,7 +87,7 @@ class MDResult:
         """
         if len(self.history) < 3:
             return float("nan")
-        times = np.array([row[0] for row in self.history]) * 1e12  # picoseconds
+        times = np.array([row[0] for row in self.history]) / 1000.0  # picoseconds
         slope = np.polyfit(times, self.total_energies, 1)[0]
         return 1000.0 * slope / natoms
 
@@ -191,7 +191,7 @@ def run(
     result = MDResult(atoms=working, steps=0, trajectory=trajectory)
     wants_pressure = settings.ensemble == "npt"
     logger(
-        f"  {'step':>6s} {'time (s)':>12s} {'E_pot (eV)':>18s} {'E_kin (eV)':>12s} "
+        f"  {'step':>6s} {'time (fs)':>12s} {'E_pot (eV)':>18s} {'E_kin (eV)':>12s} "
         f"{'E_tot (eV)':>18s} {'T (K)':>10s}"
     )
 
@@ -205,13 +205,13 @@ def run(
         if wants_pressure:
             pressure = working.calc.get_pressure(working)
         logger(
-            f"  {step:6d} {step * timestep / ase_units.fs * 1e-15:12.4e} {potential:18.9f} "
+            f"  {step:6d} {step * timestep / ase_units.fs:12.3f} {potential:18.9f} "
             f"{kinetic:12.6f} {potential + kinetic:18.9f} {temperature:10.3f}"
         )
         if step >= settings.equilibration_steps:
             result.history.append(
                 (
-                    step * settings.timestep * 1e-15,
+                    step * settings.timestep,
                     potential,
                     kinetic,
                     potential + kinetic,

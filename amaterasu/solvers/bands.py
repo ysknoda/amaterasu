@@ -199,6 +199,7 @@ def run(
         logger=logger,
         download=download,
         write_output=False,
+        compute_properties=False,
     )
     if not scf_run.result.converged:
         raise RuntimeError("the self-consistent step did not converge; the bands would be noise")

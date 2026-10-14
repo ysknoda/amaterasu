@@ -41,6 +41,7 @@ __all__ = [
     "EV_IN_HARTREE",
     "GPA_IN_EV_PER_ANG3",
     "HARTREE_IN_EV",
+    "HARTREE_PER_BOHR3_IN_EV_PER_ANG3",
     "HARTREE_PER_BOHR3_IN_GPA",
     "HARTREE_PER_BOHR_IN_EV_PER_ANG",
     "KB_HARTREE_PER_K",
@@ -77,6 +78,8 @@ HARTREE_PER_BOHR_IN_EV_PER_ANG: float = HARTREE_IN_EV / BOHR_IN_ANG
 HARTREE_PER_BOHR3_IN_GPA: float = HARTREE_IN_EV / BOHR_IN_ANG**3 / _ase.GPa
 #: Boltzmann constant in Ha/K (~= 3.1668e-6).
 KB_HARTREE_PER_K: float = float(_ase.kB) * EV_IN_HARTREE
+#: eV/Angstrom^3 per Ha/Bohr^3 (~= 183.6).
+HARTREE_PER_BOHR3_IN_EV_PER_ANG3: float = HARTREE_IN_EV / BOHR_IN_ANG**3
 #: eV/Angstrom^3 per GPa (~= 0.006242). Input pressures are quoted in GPa; ASE's stress
 #: and its cell filters work in eV/Angstrom^3, so this is the conversion at that boundary.
 GPA_IN_EV_PER_ANG3: float = float(_ase.GPa)
@@ -183,13 +186,24 @@ FS_IN_SECONDS: float = 1e-15
 #: Input files are a separate matter: they accept explicit units per field (see
 #: :func:`parse_energy`) and default to the convention of each field's own community
 #: (Ry for plane-wave cutoffs, eV for smearing, fs for MD timesteps, GPa for pressure).
+#:
+#: Stress follows akitsushima's convention (ADR-0014): ``sigma = -(1/V) dE/dT`` for
+#: ``lattice' = lattice @ T``, **positive under compression**, in eV/Angstrom^3 in data
+#: files and GPa in logs. Internally, and in the ASE calculator, it keeps ASE's sign
+#: (positive under tension); :func:`stress_to_output` is the one place it is flipped.
+#: Pressure ``P = tr(sigma)/3`` is positive under compression in both conventions.
+#: ``time`` is simulated (MD) time; wall-clock times are in seconds.
 OUTPUT_UNITS: dict[str, str] = {
     "energy": "eV",
     "length": "Angstrom",
     "force": "eV/Angstrom",
+    "stress": "eV/Angstrom^3",
     "pressure": "GPa",
-    "time": "s",
+    "time": "fs",
 }
+
+#: The value of the ``stress_convention`` attribute written into every result file.
+STRESS_CONVENTION = "positive_under_compression"
 
 
 def energy_to_output(value_hartree):
@@ -212,10 +226,15 @@ def pressure_to_output(value_hartree_per_bohr3):
     return value_hartree_per_bohr3 * HARTREE_PER_BOHR3_IN_GPA
 
 
-def time_to_output(value_atomic):
-    """Convert a time from internal atomic units to the output unit (seconds).
+def stress_to_output(value_hartree_per_bohr3):
+    """Convert an internal stress (Ha/Bohr^3, ASE's sign) to the output convention.
 
-    Times in amaterasu output are in seconds, so an MD timestep reads as ``1.0e-15 s``
-    rather than ``1.0 fs``. Input files still take ``md.timestep`` in fs.
+    The result is in eV/Angstrom^3 and positive under compression (ADR-0014). For a
+    symmetric tensor the two sign conventions differ by the sign alone.
     """
-    return value_atomic * ATOMIC_TIME_IN_SECONDS
+    return -value_hartree_per_bohr3 * HARTREE_PER_BOHR3_IN_EV_PER_ANG3
+
+
+def time_to_output(value_atomic):
+    """Convert a simulated time from internal atomic units to the output unit (fs)."""
+    return value_atomic * ATOMIC_TIME_IN_SECONDS / FS_IN_SECONDS

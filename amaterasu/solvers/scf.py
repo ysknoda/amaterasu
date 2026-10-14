@@ -3,7 +3,8 @@
 This is the thin layer between a validated input file and
 :func:`amaterasu.scf.driver.run_scf`. It resolves the pseudopotentials, fixes the
 cutoffs, builds the :class:`~amaterasu.hamiltonian.system.PlaneWaveSystem`, runs the
-loop, prints a report in the output units and writes the HDF5 result.
+loop, computes the forces and the stress, prints a report in the output units and writes
+the HDF5 result.
 
 Every later solver -- relaxation, molecular dynamics, band structures -- drives this same
 machinery, so the split is deliberate: the physics lives in ``scf/``, and this module only
@@ -23,7 +24,11 @@ from ..hamiltonian.system import PlaneWaveSystem, build_system
 from ..io.results import write_scf
 from ..pseudo.registry import load_pseudopotentials, resolve_cutoffs
 from ..scf.driver import SCFResult, run_scf
-from ..units import HARTREE_IN_EV
+from ..units import (
+    HARTREE_IN_EV,
+    HARTREE_PER_BOHR3_IN_GPA,
+    HARTREE_PER_BOHR_IN_EV_PER_ANG,
+)
 
 __all__ = ["SCFRun", "prepare", "report", "run"]
 
@@ -35,6 +40,11 @@ class SCFRun:
     system: PlaneWaveSystem
     result: SCFResult
     pseudopotential_paths: dict[str, str]
+    #: Forces in Ha/Bohr, ``(natoms, 3)``; None when they were not requested.
+    forces: np.ndarray | None = None
+    #: Stress in Ha/Bohr^3 with ASE's internal sign (positive under tension); None when
+    #: not requested. Flipped to the output convention only when written or printed.
+    stress: np.ndarray | None = None
 
 
 def prepare(
@@ -96,6 +106,21 @@ def report(system: PlaneWaveSystem, result: SCFResult) -> str:
         )
     lines.append("")
     lines.append(_eigenvalue_table(system, result))
+    return "\n".join(lines)
+
+
+def report_forces_and_stress(system: PlaneWaveSystem, forces, stress) -> str:
+    """Forces in eV/Angstrom and the stress in GPa, positive under compression (ADR-0014)."""
+    lines = ["", "  forces (eV/Angstrom)"]
+    for symbol, force in zip(system.symbols, forces * HARTREE_PER_BOHR_IN_EV_PER_ANG, strict=True):
+        lines.append(f"    {symbol:<3s} {force[0]:14.6f} {force[1]:14.6f} {force[2]:14.6f}")
+    # Same flip as units.stress_to_output, in GPa for the log.
+    sigma = -stress * HARTREE_PER_BOHR3_IN_GPA
+    lines.append("")
+    lines.append("  stress (GPa, positive under compression)")
+    for row in sigma:
+        lines.append(f"    {row[0]:14.6f} {row[1]:14.6f} {row[2]:14.6f}")
+    lines.append(f"  {'pressure':<26s} {np.trace(sigma) / 3:16.6f} GPa")
     return "\n".join(lines)
 
 
@@ -167,8 +192,14 @@ def run(
     download: bool = True,
     write_output: bool = True,
     restart: str | Path | None = None,
+    compute_properties: bool = True,
 ) -> SCFRun:
-    """Run one SCF calculation and write its result."""
+    """Run one SCF calculation and write its result.
+
+    ``compute_properties`` adds the forces and the stress, which cost about one more SCF
+    iteration; callers that only need the energy or the density (a convergence scan, the
+    self-consistent step of a band structure) switch it off.
+    """
     system, paths = prepare(atoms, config, download=download, logger=logger)
     logger(str(system))
     for warning in _accuracy_notes(system, config):
@@ -182,6 +213,18 @@ def run(
     result = run_scf(system, config, logger=logger, density=density, wavefunctions=wavefunctions)
     logger(report(system, result))
 
+    forces = stress = None
+    if compute_properties:
+        from ..properties.forces import compute_forces
+        from ..properties.stress import compute_stress
+
+        arguments = (system, result.density, result.wavefunctions, result.occupations)
+        forces = compute_forces(*arguments, eigenvalues=result.eigenvalues)
+        stress = compute_stress(*arguments, eigenvalues=result.eigenvalues)
+        logger(report_forces_and_stress(system, forces, stress))
+        if not result.converged:
+            logger("  WARNING: the SCF did not converge, so the forces and stress are not reliable")
+
     if write_output:
         directory = Path(output_directory or config.output.directory).expanduser()
         target = directory / f"{config.output.prefix}.h5"
@@ -192,9 +235,13 @@ def run(
             config=config,
             pseudopotential_paths={s: p for s, p in paths.items() if p},
             save_wavefunctions=config.output.save_wavefunctions,
+            forces=forces,
+            stress=stress,
         )
         logger(f"\nwrote {target}")
-    return SCFRun(system=system, result=result, pseudopotential_paths=paths)
+    return SCFRun(
+        system=system, result=result, pseudopotential_paths=paths, forces=forces, stress=stress
+    )
 
 
 def _accuracy_notes(system: PlaneWaveSystem, config: Config) -> list[str]:

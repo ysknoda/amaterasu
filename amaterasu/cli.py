@@ -45,7 +45,8 @@ __all__ = ["main"]
 
 _UNIT_BANNER = (
     "output units: energy {energy}, length {length}, force {force}, "
-    "pressure {pressure}, time {time}"
+    "stress {stress} in files (positive under compression), pressure {pressure}, "
+    "MD time {time}"
 ).format(**OUTPUT_UNITS)
 
 #: Solvers whose implementation phase has not landed yet, with the phase that will add them.
@@ -111,15 +112,35 @@ def _describe_run(config: Config, structure_path: Path, atoms) -> str:
     return "\n".join(lines)
 
 
+def _check_restart(config: Config, restart: str | None) -> None:
+    """Refuse a ``--restart`` that the chosen solver would silently ignore."""
+    if restart is None:
+        return
+    if config.solver != "scf":
+        raise ConfigError(
+            f"--restart is only implemented for solver 'scf', but the input asks for "
+            f"{config.solver!r}; it would be ignored. Restarting relaxations and MD lands "
+            "with the native solvers (ADR-0017)"
+        )
+    if config.scf.method != "mixing":
+        raise ConfigError(
+            f"--restart needs scf.method: mixing; {config.scf.method!r} always starts from "
+            "fresh orbitals, and restarting it from a stored density is not implemented"
+        )
+
+
 def _command_run(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
     config = load_config(input_path, overrides=args.set)
     if args.output_dir is not None:
         config.output.directory = args.output_dir
+    _check_restart(config, args.restart)
+    say = _make_logger(config.output.log_level)
 
     structure_path = _resolve_structure_path(config, input_path, args.structure)
     atoms = read_structure(structure_path)
-    print(_describe_run(config, structure_path, atoms))
+    # A dry run exists to show the resolved settings, so it ignores output.log_level.
+    (print if args.dry_run else say)(_describe_run(config, structure_path, atoms))
 
     if args.dry_run:
         print("\n--- resolved input (all defaults expanded) ---")
@@ -131,38 +152,36 @@ def _command_run(args: argparse.Namespace) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     resolved = outdir / "resolved_input.yaml"
     resolved.write_text(config_to_yaml(config), encoding="utf-8")
-    print(f"\nwrote {resolved}")
+    say(f"\nwrote {resolved}")
 
     if config.solver == "scf":
-        print()
+        say()
         run = scf_solver.run(
             atoms,
             config,
             output_directory=outdir,
-            logger=_flushing_print,
+            logger=say,
             restart=args.restart,
         )
         return 0 if run.result.converged else 1
 
     if config.solver == "relax":
-        print()
-        relaxation = relax_solver.run(
-            atoms, config, output_directory=outdir, logger=_flushing_print
-        )
-        print(relaxation.render())
-        print(f"\nwrote {relaxation.trajectory}")
+        say()
+        relaxation = relax_solver.run(atoms, config, output_directory=outdir, logger=say)
+        say(relaxation.render())
+        say(f"\nwrote {relaxation.trajectory}")
         return 0 if relaxation.converged else 1
 
     if config.solver == "bands":
-        print()
-        structure = bands_solver.run(atoms, config, output_directory=outdir, logger=_flushing_print)
+        say()
+        structure = bands_solver.run(atoms, config, output_directory=outdir, logger=say)
         return 0 if structure.eigenvalues.size else 1
 
     if config.solver == "md":
-        print()
-        trajectory = md_solver.run(atoms, config, output_directory=outdir, logger=_flushing_print)
-        print(trajectory.render(len(atoms)))
-        print(f"\nwrote {trajectory.trajectory}")
+        say()
+        trajectory = md_solver.run(atoms, config, output_directory=outdir, logger=say)
+        say(trajectory.render(len(atoms)))
+        say(f"\nwrote {trajectory.trajectory}")
         return 0
 
     phase = _UNIMPLEMENTED_SOLVERS.get(config.solver, "a later phase")
@@ -276,6 +295,31 @@ def _flushing_print(*args) -> None:
     print(*args, flush=True)
 
 
+#: Line prefixes that mark a message as a warning for ``output.log_level: warning``.
+_WARNING_PREFIXES = ("WARNING", "NOTE")
+
+
+def _make_logger(level: str):
+    """The run log for ``output.log_level``.
+
+    ``debug`` and ``info`` print everything; ``warning`` prints only the lines that start
+    with WARNING or NOTE (after leading whitespace); ``error`` prints nothing, because
+    errors go to stderr through the exception handler in :func:`main`. The results are in
+    the output files whatever the level.
+    """
+    if level in ("debug", "info"):
+        return _flushing_print
+    if level == "warning":
+
+        def warnings_only(*args) -> None:
+            text = " ".join(str(a) for a in args)
+            if text.lstrip().startswith(_WARNING_PREFIXES):
+                _flushing_print(*args)
+
+        return warnings_only
+    return lambda *_: None
+
+
 def _parse_scan_range(text: str) -> list[float]:
     """Parse ``START:STOP:STEP`` into an inclusive list of values."""
     parts = text.split(":")
@@ -358,6 +402,7 @@ def _command_convergence(args: argparse.Namespace) -> int:
                 logger=lambda *_: None,
                 write_output=False,
                 download=not args.offline,
+                compute_properties=False,
             )
         except PseudoResolutionError as exc:
             for problem in exc.problems:

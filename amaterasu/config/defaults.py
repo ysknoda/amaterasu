@@ -244,6 +244,74 @@ def _check_physics_consistency(config: Config, log: ErrorLog) -> None:
         log.add("output.checkpoint_every", "must be non-negative (0 disables checkpointing)")
 
 
+def _not_yet(log: ErrorLog, path: str, what: str, lands: str) -> None:
+    log.add(path, f"{what} is not implemented yet -- it lands in {lands}")
+
+
+def _check_not_implemented(config: Config, log: ErrorLog) -> None:
+    """Settings the schema accepts but no code path reads yet.
+
+    A setting that validates and is then ignored is the worst kind of input error: the run
+    finishes, the output looks normal, and the result is not what was asked for (a
+    ``system.hubbard`` block used to produce a plain DFT run). Such settings are refused
+    here, as unimplemented solvers are, until the code that honours them lands. Only
+    values that differ from what the code actually does are refused, so the defaults
+    always pass.
+    """
+    if config.system.hubbard.scheme != "none":
+        _not_yet(log, "system.hubbard.scheme", "DFT+U", "Phase 5 (analysis solvers)")
+    if config.basis.type == "mixed":
+        _not_yet(
+            log,
+            "basis.type",
+            "the mixed plane-wave + atomic-orbital basis",
+            "Phase 8, which is on hold (ADR-0015)",
+        )
+    if config.basis.type == "mixed" and config.basis.atomic_orbitals:
+        _not_yet(log, "basis.atomic_orbitals", "the mixed basis", "Phase 8 (on hold)")
+    if config.occupations.scheme == "tetrahedron":
+        _not_yet(
+            log,
+            "occupations.scheme",
+            "the linear tetrahedron method",
+            "Phase 5 with the DOS solver; use a smearing scheme or 'fixed' meanwhile",
+        )
+    if config.scf.eigensolver != "davidson":
+        _not_yet(
+            log,
+            "scf.eigensolver",
+            f"{config.scf.eigensolver!r}",
+            "Phase 9 (performance); use 'davidson'",
+        )
+    if config.scf.method.startswith("direct") and config.pseudo.method == "paw":
+        log.add(
+            "scf.method",
+            f"{config.scf.method!r} is not implemented for PAW: direct minimisation keeps the "
+            "orbitals orthonormal in the Euclidean metric, while PAW needs the S metric. Use "
+            "scf.method: mixing for a PAW calculation",
+        )
+    parallel = config.parallel
+    if parallel.numba:
+        _not_yet(log, "parallel.numba", "numba-compiled kernels", "Phase 9 (performance)")
+    if isinstance(parallel.kpoint_groups, int) and parallel.kpoint_groups > 1:
+        _not_yet(
+            log,
+            "parallel.kpoint_groups",
+            "MPI parallelism over k-points",
+            "the Phase 5 period (ADR-0015); leave it at 'auto' or 1",
+        )
+    if parallel.band_groups > 1:
+        _not_yet(log, "parallel.band_groups", "MPI parallelism over bands", "Phase 9")
+    if config.output.checkpoint_every > 0:
+        _not_yet(
+            log,
+            "output.checkpoint_every",
+            "periodic checkpointing",
+            "the native relaxation and MD solvers (ADR-0017); set it to 0. A finished SCF "
+            "run already writes a results file that --restart can resume from",
+        )
+
+
 def resolve_and_validate(config: Config, log: ErrorLog) -> Config:
     """Run every cross-field check, recording problems in ``log``.
 
@@ -257,4 +325,5 @@ def resolve_and_validate(config: Config, log: ErrorLog) -> Config:
     _check_scf(config, log)
     _check_solver_requirements(config, log)
     _check_physics_consistency(config, log)
+    _check_not_implemented(config, log)
     return config

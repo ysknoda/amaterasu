@@ -1,7 +1,8 @@
-"""amaterasu -- plane-wave / mixed-basis density functional theory for 3D periodic crystals.
+"""amaterasu -- plane-wave density functional theory for 3D periodic crystals.
 
 amaterasu computes internally in Hartree atomic units and reports every physical quantity
-in eV, Angstrom, eV/Angstrom, GPa and seconds; see :mod:`amaterasu.units`.
+in eV, Angstrom, eV/Angstrom, eV/Angstrom^3 (stress, positive under compression), GPa
+and fs; see :mod:`amaterasu.units`.
 """
 
 from __future__ import annotations

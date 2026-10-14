@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from amaterasu.config import Config, ConfigError, config_to_yaml, load_config, load_config_mapping
+from amaterasu.config._loader import ErrorLog, build_dataclass
 from amaterasu.config._yaml import safe_load as yaml_safe_load
 from amaterasu.config.overrides import apply_overrides, parse_override
 
@@ -101,14 +102,9 @@ def test_yaml_12_floats_in_files():
 
 def test_element_symbol_no_is_not_a_boolean():
     """YAML 1.1's yes/no booleans turn nobelium into False -- the Norway problem."""
-    data = yaml_safe_load(
-        "structure: s\nbasis: {ecut: 60}\n"
-        "system: {hubbard: {scheme: dudarev, projector: atomic,"
-        " species: {No: {U: 4.0, J: 0.5}}}}\n"
-    )
+    data = yaml_safe_load("structure: s\nbasis: {ecut: 60}\npseudo: {files: {No: No.upf}}\n")
     config = load_config_mapping(data)
-    assert "No" in config.system.hubbard.species
-    assert config.system.hubbard.species["No"].U == pytest.approx(4.0)
+    assert config.pseudo.files == {"No": "No.upf"}
 
 
 def test_yaml_11_boolean_words_get_a_helpful_message():
@@ -122,17 +118,27 @@ def test_overrides_reach_nested_fields():
     """Gate 3: dotted paths must reach arbitrarily deep, including new dict entries."""
     config = load_config_mapping(
         _minimal(),
-        overrides=[
-            "kpoints.grid=[4,4,4]",
-            "scf.mixing.beta=0.2",
-            "system.hubbard.scheme=dudarev",
-            "system.hubbard.species.Ni.U=6.0",
-            "system.hubbard.species.Ni.J=1.0",
-            "system.hubbard.projector=atomic",
-        ],
+        overrides=["kpoints.grid=[4,4,4]", "scf.mixing.beta=0.2", "pseudo.files.Ni=Ni.upf"],
     )
     assert config.kpoints.grid == [4, 4, 4]
     assert config.scf.mixing.beta == pytest.approx(0.2)
+    assert config.pseudo.files == {"Ni": "Ni.upf"}
+
+
+def test_overrides_reach_new_entries_of_a_nested_mapping():
+    """Two levels of new dict entries. DFT+U itself is refused by the semantic pass, so
+    only the structural pass is run here."""
+    data = apply_overrides(
+        _minimal(),
+        [
+            "system.hubbard.scheme=dudarev",
+            "system.hubbard.species.Ni.U=6.0",
+            "system.hubbard.species.Ni.J=1.0",
+        ],
+    )
+    log = ErrorLog()
+    config = build_dataclass(Config, data, "", log)
+    assert not log.problems
     assert config.system.hubbard.species["Ni"].U == pytest.approx(6.0)
     assert config.system.hubbard.species["Ni"].J == pytest.approx(1.0)
 
@@ -301,3 +307,44 @@ def test_direct_minimisation_requires_fixed_occupations():
         {**base, "scf": {"method": "direct-lbfgs"}, "occupations": {"scheme": "fixed"}}
     )
     assert config.scf.method == "direct-lbfgs"
+
+
+# --------------------------------------------------------------- not implemented yet
+@pytest.mark.parametrize(
+    ("section", "setting", "path"),
+    [
+        ("system", {"hubbard": {"scheme": "dudarev", "species": {"Ni": {"U": 6.0}}}}, "hubbard"),
+        ("basis", {"type": "mixed", "ecut": 60}, "basis.type"),
+        ("occupations", {"scheme": "tetrahedron"}, "occupations.scheme"),
+        ("scf", {"eigensolver": "lobpcg"}, "scf.eigensolver"),
+        ("scf", {"eigensolver": "rmm-diis"}, "scf.eigensolver"),
+        ("parallel", {"numba": True}, "parallel.numba"),
+        ("parallel", {"kpoint_groups": 2}, "parallel.kpoint_groups"),
+        ("parallel", {"band_groups": 2}, "parallel.band_groups"),
+        ("output", {"checkpoint_every": 10}, "output.checkpoint_every"),
+    ],
+)
+def test_settings_no_code_reads_are_refused_at_load_time(section, setting, path):
+    """A setting that validates and is then ignored produces a normal-looking wrong run."""
+    with pytest.raises(ConfigError, match=rf"{path}.*not implemented yet"):
+        load_config_mapping({**_minimal(), section: setting})
+
+
+def test_direct_minimisation_with_paw_is_refused_at_load_time():
+    with pytest.raises(ConfigError, match="not implemented for PAW"):
+        load_config_mapping(
+            {
+                **_minimal(),
+                "pseudo": {"method": "paw"},
+                "scf": {"method": "direct-lbfgs"},
+                "occupations": {"scheme": "fixed"},
+            }
+        )
+
+
+def test_defaults_name_only_what_is_implemented():
+    """The refusals above must never fire on an input that sets nothing."""
+    config = load_config_mapping(_minimal())
+    assert config.parallel.numba is False
+    assert config.output.checkpoint_every == 0
+    load_config_mapping({**_minimal(), "parallel": {"kpoint_groups": 1, "band_groups": 1}})

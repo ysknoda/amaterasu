@@ -69,22 +69,28 @@ def test_atomic_unit_derived_values():
 
 
 def test_output_unit_convention():
-    """Reported quantities use eV, Angstrom, eV/Angstrom, GPa and seconds."""
+    """Reported quantities use eV, Angstrom, eV/Angstrom, eV/Angstrom^3, GPa and fs (ADR-0014)."""
     assert units.OUTPUT_UNITS == {
         "energy": "eV",
         "length": "Angstrom",
         "force": "eV/Angstrom",
+        "stress": "eV/Angstrom^3",
         "pressure": "GPa",
-        "time": "s",
+        "time": "fs",
     }
+    assert units.STRESS_CONVENTION == "positive_under_compression"
     reference = _codata_reference()
     assert units.energy_to_output(1.0) == pytest.approx(sc.value("Hartree energy in eV"), rel=1e-6)
     assert units.length_to_output(1.0) == pytest.approx(sc.value("Bohr radius") * 1e10, rel=1e-6)
     assert units.force_to_output(1.0) == pytest.approx(reference["force"], rel=1e-6)
     assert units.pressure_to_output(1.0) == pytest.approx(reference["pressure"], rel=1e-6)
-    # One femtosecond expressed in atomic time units must come back as 1e-15 s.
+    # One femtosecond expressed in atomic time units must come back as 1 fs.
     one_fs_in_au = units.FS_IN_SECONDS / units.ATOMIC_TIME_IN_SECONDS
-    assert units.time_to_output(one_fs_in_au) == pytest.approx(1e-15, rel=1e-12)
+    assert units.time_to_output(one_fs_in_au) == pytest.approx(1.0, rel=1e-12)
+    # Stress: eV/Angstrom^3, sign flipped from the internal (ASE) convention.
+    assert units.stress_to_output(1.0) == pytest.approx(
+        -reference["pressure"] * units.GPA_IN_EV_PER_ANG3, rel=1e-6
+    )
 
 
 @pytest.mark.parametrize(

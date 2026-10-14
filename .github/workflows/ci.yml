@@ -1,12 +1,17 @@
 name: CI
 
+# Manual runs only. The repository is private, so every minute counts against the free
+# tier, and scheduled plus push-triggered runs (four macOS jobs per push at the 10x macOS
+# rate, and a 69-minute nightly physics job) exhausted it in September 2026. CI is run on
+# explicit request; the test suite is run locally otherwise. Do not add push, pull_request
+# or schedule triggers back without that decision being revisited (docs/adr/README.md).
 on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    # Nightly, to run the slow physics validation suite that PRs skip.
-    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      physics:
+        description: "Also run the slow physics validation suite (about 70 minutes)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,8 +34,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        # One macOS job: macOS minutes are billed at ten times the Linux rate.
+        include:
+          - os: macos-latest
+            python-version: "3.13"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,8 +60,8 @@ jobs:
 
   physics:
     # The physics suite validates against reference data (equations of state, delta-factor,
-    # literature values) and is far too slow for every push.
-    if: github.event_name == 'schedule'
+    # literature values) and is far too slow to run by default.
+    if: inputs.physics
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +71,7 @@ jobs:
           cache: pip
       - run: pip install -e ".[test,phonons,plot]"
       # libxc is not on PyPI, so the exchange-correlation reference is built from source.
-      # Only the nightly job pays this cost; the fast job skips those tests.
+      # Only the physics job pays this cost; the fast job skips those tests.
       - name: Build libxc
         run: |
           curl -sL -o libxc.tar.gz https://gitlab.com/libxc/libxc/-/archive/7.1.2/libxc-7.1.2.tar.gz

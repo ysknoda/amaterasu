@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 import yaml
 
 from amaterasu.cli import main
+from amaterasu.units import GPA_IN_EV_PER_ANG3
 
 from ..conftest import SI_REFERENCE
 
@@ -41,8 +43,9 @@ def test_info_states_the_output_units(project, capsys):
     assert "energy eV" in out
     assert "length Angstrom" in out
     assert "force eV/Angstrom" in out
+    assert "stress eV/Angstrom^3" in out
     assert "pressure GPa" in out
-    assert "time s" in out
+    assert "MD time fs" in out
 
 
 def test_info_on_a_calculation_input(project, capsys):
@@ -185,6 +188,17 @@ def test_run_performs_an_scf_and_writes_hdf5(project, capsys):
         assert handle["scf/eigenvalues"].shape[0] == 1
         assert handle["density"].attrs["units"] == "electrons/Angstrom^3"
         assert "resolved_input" in handle.attrs
+        # ADR-0014: forces and stress are written, and the file says which sign it uses.
+        assert handle.attrs["format_version"] == 2
+        assert handle.attrs["stress_convention"] == "positive_under_compression"
+        assert handle["forces"].shape == (2, 3)
+        assert handle["forces"].attrs["units"] == "eV/Angstrom"
+        stress = handle["stress"][()]
+        assert stress.shape == (3, 3)
+        assert handle["stress"].attrs["units"] == "eV/Angstrom^3"
+        pressure = handle["stress"].attrs["pressure_GPa"]
+        assert np.trace(stress) / 3 / GPA_IN_EV_PER_ANG3 == pytest.approx(pressure, rel=1e-12)
+    assert "stress (GPa, positive under compression)" in out
 
 
 def test_invalid_input_reports_every_problem(project, capsys):
@@ -345,3 +359,47 @@ def _iterations(output: str) -> int:
         if line.startswith("SCF converged in "):
             return int(line.split()[3])
     raise AssertionError("no convergence line in the output")
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        (["solver=relax"], "only implemented for solver 'scf'"),
+        (["solver=md"], "only implemented for solver 'scf'"),
+        (["solver=bands"], "only implemented for solver 'scf'"),
+        (["scf.method=direct-lbfgs", "occupations.scheme=fixed"], "needs scf.method: mixing"),
+    ],
+)
+def test_restart_is_refused_where_it_would_be_ignored(project, capsys, overrides, message):
+    """--restart used to be dropped silently by every solver but scf; refuse it up front,
+    before any output is written."""
+    argv = ["run", str(project / "calc.yaml"), "-o", str(project / "out"), "--dry-run"]
+    for override in overrides:
+        argv += ["--set", override]
+    assert main([*argv, "--restart", str(project / "missing.h5")]) == 2
+    assert message in capsys.readouterr().err
+    assert not (project / "out").exists()
+
+
+def test_log_level_warning_keeps_only_warnings(project, capsys):
+    common = [
+        "run",
+        str(project / "calc.yaml"),
+        "-o",
+        str(project / "out"),
+        "--set",
+        "basis.ecut=12",
+        "--set",
+        "kpoints.grid=[2,2,2]",
+        "--set",
+        "occupations.scheme=fixed",
+    ]
+    assert main([*common, "--set", "output.log_level=warning"]) == 0
+    quiet = capsys.readouterr().out
+    assert "SCF converged" not in quiet
+    assert "solver" not in quiet
+    assert all(line.lstrip().startswith(("WARNING", "NOTE")) for line in quiet.splitlines())
+    assert (project / "out" / "amaterasu.h5").exists(), "the results are written regardless"
+
+    assert main([*common, "--set", "output.log_level=error"]) == 0
+    assert capsys.readouterr().out == ""

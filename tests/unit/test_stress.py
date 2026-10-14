@@ -147,6 +147,19 @@ def test_total_stress_matches_a_finite_difference(stress_comparison):
     assert sum(analytic.values()) == pytest.approx(sum(numerical.values()), abs=5e-9)
 
 
+def test_output_stress_is_minus_the_strain_derivative(stress_comparison):
+    """ADR-0014 at the output boundary: sigma_out = -(1/V) dE/d eps, in eV/Angstrom^3.
+
+    The internal stress is ASE's (+(1/V) dE/d eps); the flip happens once, in
+    ``units.stress_to_output``, and this pins its sign and unit to a finite difference.
+    """
+    from amaterasu.units import HARTREE_PER_BOHR3_IN_EV_PER_ANG3, stress_to_output
+
+    analytic, numerical = stress_comparison
+    expected = -sum(numerical.values()) * HARTREE_PER_BOHR3_IN_EV_PER_ANG3
+    assert stress_to_output(sum(analytic.values())) == pytest.approx(expected, abs=1e-6)
+
+
 def test_stress_is_symmetric(stress_comparison):
     analytic, _ = stress_comparison
     total = sum(analytic.values())
@@ -181,7 +194,10 @@ def test_pressure_sign_convention(si_atoms, si_pseudo):
     config.occupations.scheme = "fixed"
     config.scf.tol_density = 1e-8
 
+    from amaterasu.units import stress_to_output
+
     pressures = []
+    output_diagonals = []
     for scale in (0.94, 1.06):
         squeezed = si_atoms.copy()
         squeezed.set_cell(si_atoms.cell * scale, scale_atoms=True)
@@ -189,9 +205,14 @@ def test_pressure_sign_convention(si_atoms, si_pseudo):
         result = run_scf(system, config)
         stress = compute_stress(system, result.density, result.wavefunctions, result.occupations)
         pressures.append(-np.trace(stress) / 3 * HARTREE_PER_BOHR3_IN_GPA)
+        output_diagonals.append(np.diag(stress_to_output(stress)))
     compressed, expanded = pressures
     assert compressed > expanded
     assert compressed > 0.0
+    # The output convention (ADR-0014) is positive under compression, component by
+    # component, and its trace/3 is the pressure.
+    assert np.all(output_diagonals[0] > 0.0)
+    assert np.all(output_diagonals[1] < 0.0)
 
 
 def test_voigt_conversion_round_trip():

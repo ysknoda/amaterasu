@@ -5,7 +5,7 @@
 > between releases, and it has not yet been broadly tested. Do not
 > rely on it for production use.
 
-Plane-wave / mixed-basis density functional theory for three-dimensional periodic crystals.
+Plane-wave density functional theory for three-dimensional periodic crystals.
 
 > **Status: early development (Phase 4 complete, Phase 5 under way).** `solver: scf`, `relax` and `md` all
 > run, with norm-conserving *and* PAW datasets. Plane-wave DFT with LDA/PBE/PBEsol, spin
@@ -20,12 +20,25 @@ Plane-wave / mixed-basis density functional theory for three-dimensional periodi
 
 ## What it is
 
-A from-scratch Kohn-Sham DFT code in Python, built on numpy/scipy for the numerics,
-numba for the hot loops, and ASE, spglib, seekpath and phonopy for the surrounding
-infrastructure. amaterasu implements the electronic-structure engine -- plane-wave basis,
-pseudopotentials and PAW, exchange-correlation functionals, eigensolvers, SCF, forces,
-stress, DFT+U, DFPT, Wannier functions -- and drives the well-tested ASE implementations
-for geometry optimisation, molecular dynamics and nudged elastic band.
+A from-scratch Kohn-Sham DFT code in Python, built on numpy/scipy for the numerics and
+ASE, spglib and seekpath for the surrounding infrastructure. amaterasu implements the
+electronic-structure engine -- plane-wave basis, norm-conserving pseudopotentials and PAW,
+LDA/PBE/PBEsol, a Davidson eigensolver, density-mixing and direct-minimisation SCF,
+analytic forces and stress -- and today drives ASE for geometry optimisation and
+molecular dynamics.
+
+Not implemented yet, and planned (see [Roadmap](#roadmap)): DOS/PDOS, nudged elastic
+band, phonons, DFT+U, DFPT, Wannier90 output, numba-compiled kernels and MPI. amaterasu
+aims to become a general-purpose code with the standard features users of Quantum
+ESPRESSO or VASP expect, plus orbital-free DFT; the order is recorded in
+[ADR-0015](docs/adr/0015-general-purpose-scope-and-standard-feature-roadmap.md).
+
+**Settings that are not implemented are refused, not ignored.** The input schema already
+names some of them (`system.hubbard`, `basis.type: mixed`, `occupations.scheme:
+tetrahedron`, `scf.eigensolver: lobpcg`, `parallel.numba`, MPI groups,
+`output.checkpoint_every`); setting one to anything but its default stops the run at load
+time with the phase it lands in, as an unimplemented `solver:` does. `--restart` is
+likewise refused for every solver but `scf`.
 
 ## Units
 
@@ -38,8 +51,17 @@ quantity produced it:
 | energy | eV |
 | length | Å |
 | force | eV/Å |
-| pressure, stress | GPa |
-| time | s |
+| stress | eV/Å³ in result files, GPa in logs -- **positive under compression** |
+| pressure | GPa, positive under compression |
+| MD time | fs (wall-clock times stay in s) |
+
+The stress sign is deliberate and the opposite of ASE's and VASP's: amaterasu follows its
+sister package akitsushima, `σ = -(1/V) ∂E/∂T` for `lattice' = lattice @ T`, so a
+compressed cell has a positive stress
+([ADR-0014](docs/adr/0014-output-stress-is-positive-under-compression.md)). The one
+exception is the [ASE calculator](#ase-calculator), whose `get_stress()` keeps ASE's sign
+because ASE's optimisers and cell filters depend on it. Result files say which convention
+they use in a `stress_convention` attribute.
 
 Input files are a separate convention: each field defaults to the unit its own community
 uses (Ry for plane-wave cutoffs, eV for smearing, fs for MD timesteps, GPa for pressure),
@@ -51,7 +73,8 @@ and any energy field also accepts an explicit unit, e.g. `ecut: "816 eV"`.
 pip install -e ".[test]"
 ```
 
-Optional extras: `jit` (numba, for the Phase 9 compiled kernels), `mpi` (mpi4py),
+Optional extras: `jit` (numba, reserved for the Phase 9 compiled kernels -- nothing
+imports it yet), `mpi` (mpi4py, likewise reserved),
 `fftw` (pyFFTW), `phonons` (phonopy), `plot` (matplotlib). None are needed for a
 plain run; each is imported only where the feature it backs is used, and the pure
 numpy/scipy path is taken when it is absent.
@@ -105,8 +128,12 @@ amaterasu convergence calc.yaml --scan kpoints.grid --range 2:14:2
 
 Any format ASE can read (POSCAR/CONTCAR, CIF, xyz/extxyz, ...) is accepted wherever a
 structure file is expected. A run writes `resolved_input.yaml` (every default expanded)
-and an HDF5 file holding the energies, eigenvalues, occupations and density in the output
-units, with the amaterasu version and the MD5 of every pseudopotential recorded alongside.
+and an HDF5 file holding the energies, eigenvalues, occupations, density, forces and
+stress in the output units, with the amaterasu version and the MD5 of every
+pseudopotential recorded alongside. The file's `format_version` attribute is 2; files
+from 0.1.0a2 and earlier have no such attribute and no forces or stress.
+`output.log_level: warning` keeps only warnings in the log; the results are written
+whatever the level.
 
 `examples/si/` holds runnable inputs for each solver: `scf.yaml` (a single point),
 `relax.yaml` (relaxing a displaced atom back onto its Wyckoff site) and `md.yaml` (a short
@@ -371,8 +398,13 @@ it is the one to reach for on a 3d transition metal.
 | 5 ◐ | bands, DOS/PDOS, CI-NEB, phonons, DFT+U | band structure lands first: silicon's indirect gap along the seekpath path is **0.608 eV**, the same number the self-consistent mesh gives. Outstanding: DOS/PDOS, NEB, phonons, DFT+U |
 | 6 | DFPT: dielectric, Born charges, phonons, elastic | DFPT phonons ≡ finite-displacement phonons; ΣZ* = 0 |
 | 7 | Wannier functions (Wannier90 files, then native MLWF) | spreads match Wannier90 on identical input |
-| 8 | mixed basis (plane waves + atomic orbitals) | converges to the pure plane-wave result |
-| 9 | numba kernels, MPI over k-points/bands/plane waves | results independent of process count |
+| 8 ⏸ | mixed basis (plane waves + atomic orbitals) -- on hold: ultrasoft and PAW datasets now cover its purpose | converges to the pure plane-wave result |
+| 9 | numba kernels, MPI over k-points/bands/plane waves (MPI over k-points is brought forward into the Phase 5 period) | results independent of process count |
+
+Beyond these phases -- spin-orbit coupling, r²SCAN, HSE06, charged-defect corrections,
+band unfolding, dipole corrections, D3, and orbital-free DFT -- the order and scope are
+recorded in [ADR-0015](docs/adr/0015-general-purpose-scope-and-standard-feature-roadmap.md)
+to [ADR-0017](docs/adr/0017-ports-from-akitsushima-and-ikazuchix.md).
 
 ## Pseudopotentials and PAW datasets
 

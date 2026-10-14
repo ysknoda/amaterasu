@@ -78,6 +78,8 @@ class SystemConfig:
     #: Net charge of the cell in units of |e| (positive = electrons removed). A charged
     #: cell is neutralised by a uniform background; finite-size corrections are not applied.
     charge: float = 0.0
+    #: Validated, but DFT+U is not implemented yet (Phase 5): any ``scheme`` other than
+    #: ``none`` is refused at load time.
     hubbard: HubbardConfig = field(default_factory=HubbardConfig)
 
 
@@ -332,12 +334,15 @@ class WannierConfig:
 # --------------------------------------------------------------------------- runtime
 @dataclass
 class ParallelConfig:
-    #: Number of MPI groups over k-points; ``"auto"`` uses as many as divide evenly.
+    #: Number of MPI groups over k-points; ``"auto"`` uses as many as divide evenly. MPI is
+    #: not implemented yet, so only ``"auto"`` and 1 are accepted and the run is serial.
     kpoint_groups: int | Literal["auto"] = "auto"
+    #: Number of MPI groups over bands (Phase 9, not implemented yet: only 1 is accepted).
     band_groups: int = 1
     fft_backend: Literal["scipy", "pyfftw"] = "scipy"
-    #: Use the numba-compiled kernels; False falls back to the numpy reference paths.
-    numba: bool = True
+    #: Use the numba-compiled kernels (Phase 9, not implemented yet: only False is
+    #: accepted). False runs the numpy reference paths.
+    numba: bool = False
 
 
 @dataclass
@@ -345,9 +350,14 @@ class OutputConfig:
     directory: str = "./out"
     prefix: str = "amaterasu"
     save_wavefunctions: bool = False
+    #: Verbosity of the command-line log. ``info`` prints the run header and the progress of
+    #: every iteration; ``warning`` prints only warnings and the final result; ``error``
+    #: prints nothing but errors and the final result. ``debug`` currently prints the same
+    #: as ``info``.
     log_level: Literal["debug", "info", "warning", "error"] = "info"
-    #: Write a restart checkpoint every N SCF/ionic steps; 0 disables checkpointing.
-    checkpoint_every: int = 10
+    #: Write a restart checkpoint every N ionic steps; 0 disables checkpointing. Not
+    #: implemented yet, so only 0 is accepted.
+    checkpoint_every: int = 0
 
 
 # --------------------------------------------------------------------------- root
