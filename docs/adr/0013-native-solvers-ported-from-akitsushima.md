@@ -1,10 +1,17 @@
 ---
-status: accepted
+status: accepted (amended by 0017)
 date: 2026-09-30
 amends: the plan's settled decision 2 ("ASE is required; relax, MD and NEB are not re-implemented")
 ---
 
 # Native relaxation, MD and NEB are ported from akitsushima by copy, behind one energy/force/stress contract that also carries trajectory context; ASE stays, as the reference
+
+> **Amended by [ADR-0017](0017-ports-from-akitsushima-and-ikazuchix.md).** The method below
+> stands. The port list grows (EOS fits, phonon thermodynamics, QHA, Grüneisen parameters,
+> non-analytic correction and dielectric response), and the port is no longer a later
+> Phase 11: Phase 5 starts with the contract and adapter, and its NEB and phonons are the
+> ported versions from the start, with ASE's NEB and phonopy kept as references inside the
+> tests.
 
 The plan settled early that ASE is a required dependency and that amaterasu drives ASE's
 optimisers, dynamics and NEB rather than re-implementing them. That kept Phases 3-5 small,

@@ -129,6 +129,19 @@ Whether a set of structures keeps its energy ordering when the discretisation is
 Measured by Kendall tau, top-k recall and the largest energy difference of any inverted
 pair.
 
+**Error-estimated multi-level**:
+Choosing the theory level (orbital-free, partial-orbital, Kohn-Sham, PAW) and the
+discretisation per structure or per region from a posteriori error estimates of a goal
+quantity (ADR-0016). Between orbital-free and Kohn-Sham the estimate is calibrated, not
+bounded.
+_Avoid_: "certified" except for a part with a rigorous error bound
+
+**Partial-orbital DFT**:
+Solving the lowest M orbitals explicitly and treating the remaining density with a Pauli
+functional; M = 0 is orbital-free theory and M = N/2 is Kohn-Sham theory (research item
+R5, ADR-0016).
+_Avoid_: "B1" (collides with row B1 of ADR-0012)
+
 ### Pseudopotentials and datasets
 
 **Dataset**:

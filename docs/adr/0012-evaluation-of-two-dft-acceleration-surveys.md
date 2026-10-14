@@ -1,9 +1,17 @@
 ---
-status: accepted
+status: accepted (amended by 0015, 0016)
 date: 2026-09-30
 ---
 
 # Two AI-written DFT acceleration surveys, rated and ranked: a practical track built on trajectory history, and one research item worth doing first -- rank-preserving goal-oriented error control
+
+> **Amended by [ADR-0015](0015-general-purpose-scope-and-standard-feature-roadmap.md) and
+> [ADR-0016](0016-identity-against-dftpy-error-estimated-multi-level.md).** The ratings below
+> were made at "Python, ~50 atoms"; ADR-0015 widens amaterasu to a general-purpose code and
+> they are not redone, but: B8 (ACE) is now P1, because HSE06 is planned; C4's trigger is
+> re-evaluated together with Phase 8, which is held; and the research track gains R5
+> (partial-orbital DFT) and R6 (the Zhou-Wang step as an error estimator), with O3 merged
+> into C5a/R2 (ADR-0016). "R5" was chosen so as not to collide with row B1 here.
 
 Two surveys under `references/DFT_acceleration_ideas/` (gitignored, like the rest of
 `references/`) generalise the orbital-free idea -- "drop a degree of freedom the answer

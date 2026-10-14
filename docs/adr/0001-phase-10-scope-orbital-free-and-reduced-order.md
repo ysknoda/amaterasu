@@ -1,9 +1,18 @@
 ---
-status: accepted
+status: accepted (amended by 0015, 0016)
 date: 2026-09-15
 ---
 
 # Phase 10 is orbital-free DFT with non-ML kinetic functionals, plus a reduced-order Kohn-Sham track; nothing that predicts properties with a neural network
+
+> **Amended by [ADR-0015](0015-general-purpose-scope-and-standard-feature-roadmap.md) and
+> [ADR-0016](0016-identity-against-dftpy-error-estimated-multi-level.md).** The scope below
+> stands, and the full kinetic-functional ladder is still implemented. Two things change:
+> the minimal set (TF, vW, LKT, WT and one density-dependent kernel) goes first, because
+> DFTpy already covers the ladder and amaterasu's distinct contribution lies elsewhere
+> (ADR-0016); and after Phase 5 the standard-feature and research tracks alternate
+> (ADR-0015). The orbital-free engine must also beat VASP above a published atom count N\*
+> (ADR-0015).
 
 Two AI-generated surveys (eight documents under `references/`, kept out of the repository)
 converged on the same map of ways to speed up DFT without a machine-learned interatomic
